@@ -7,6 +7,8 @@ import com.pty4j.PtyProcess;
 import com.pty4j.WinSize;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
+
+import org.apache.commons.io.input.TeeInputStream;
 import org.apache.commons.lang3.SystemUtils;
 
 import java.io.*;
@@ -25,9 +27,15 @@ public class Terminal extends TerminalView {
     private final Path terminalPath;
     private String[] termCommand;
     private final LinkedBlockingQueue<String> commandQueue;
+    
+    private PipedInputStream inputStream = new PipedInputStream();
 
     public Terminal() {
         this(null, null);
+    }
+    
+    public Terminal(TerminalConfig terminalConfig) {
+    	this(terminalConfig, null);
     }
 
     public Terminal(TerminalConfig terminalConfig, Path terminalPath) {
@@ -61,6 +69,7 @@ public class Terminal extends TerminalView {
             try {
                 initializeProcess();
             } catch (final Exception e) {
+            	e.printStackTrace();
             }
         });
     }
@@ -87,7 +96,10 @@ public class Terminal extends TerminalView {
         columnsProperty().addListener(evt -> updateWinSize());
         rowsProperty().addListener(evt -> updateWinSize());
         updateWinSize();
-        setInputReader(new BufferedReader(new InputStreamReader(process.getInputStream())));
+                
+        TeeInputStream inputTee = new TeeInputStream(process.getInputStream(), new PipedOutputStream(inputStream));
+
+        setInputReader(new BufferedReader(new InputStreamReader(inputTee)));
         setErrorReader(new BufferedReader(new InputStreamReader(process.getErrorStream())));
         setOutputWriter(new BufferedWriter(new OutputStreamWriter(process.getOutputStream())));
         focusCursor();
@@ -96,6 +108,10 @@ public class Terminal extends TerminalView {
 
         process.waitFor();
     }
+    
+    public InputStream getInputStream() {
+		return inputStream;
+	}
 
     private Path getDataDir() {
         final String userHome = System.getProperty("user.home");
